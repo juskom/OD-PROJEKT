@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Strona główna{% endblock %}
+
+{% block content %}
+<h1>Witaj w aplikacji Notatki!</h1>
+<p>Przechowuj swoje notatki, szyfruj je i udostępniaj innym użytkownikom.</p>
+{% if current_user.is_authenticated %}
+    <a href="{{ url_for('main.profile') }}">Przejdź do swojego profilu</a>
+    <a href="{{ url_for('auth.logout') }}">Wyloguj się</a>
+{% else %}
+    <a href="{{ url_for('auth.login') }}">Zaloguj się</a> lub <a href="{{ url_for('auth.register') }}">Zarejestruj się</a>, aby rozpocząć.
+{% endif %}
+{% endblock %}

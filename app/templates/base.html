@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aplikacja do notatek</title>
+  </head>
+
+  <body>
+    <header>
+        <nav>
+            <ul>
+                <li><a href="{{ url_for('main.index') }}" style="margin-left: 20px">Home</a></li>
+                {% if not current_user.is_authenticated %}
+                <li><a href="{{ url_for('auth.login') }}" style="margin-left: 20px">Login</a></li>
+                <li><a href="{{ url_for('auth.register') }}" style="margin-left: 20px">Register</a></li>
+                {% endif %}
+                {% if current_user.is_authenticated %}
+                    <li><a href="{{ url_for('main.profile') }}" style="margin-left: 20px">Profile</a></li>
+                    <li><a href="{{ url_for('auth.logout') }}" style="margin-left: 20px">Logout</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        {% with messages = get_flashed_messages(with_categories=True) %}
+        {% if messages %}
+            <ul class="flashes">
+                {% for category, message in messages %}
+                    <li class="{{ category }}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        {% endwith %}
+
+        {% block content %}
+        <!-- Content for each page -->
+        {% endblock %}
+    </main>
+  </body>
+</html>

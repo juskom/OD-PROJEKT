@@ -4,3 +4,4 @@ flask_bcrypt
 flask_login
 cryptography
 python-dotenv
+pyotp
