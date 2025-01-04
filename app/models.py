@@ -7,12 +7,13 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     login = db.Column(db.String(150), unique=True, nullable=False)
     email = db.Column(db.String(150), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=False)  # Hashed password
-    totp_secret = db.Column(db.String(100))  # Secret for TOTP
+    password = db.Column(db.String(200), nullable=False)
+    salt = db.Column(db.String())
+    totp_secret = db.Column(db.String(100))
     last_failed_login = db.Column(db.DateTime, nullable=True)
     last_login = db.Column(db.DateTime, default=func.now())
     failed_login_attempts = db.Column(db.Integer, default=0)
-
+    is_verified = db.Column(db.Boolean, default=False)
     # Relacja do notatek
     notes = db.relationship('Note', backref='author', lazy=True)
     shared_notes = db.relationship('ConnectorNote', backref='user', lazy=True)
@@ -20,10 +21,11 @@ class User(UserMixin, db.Model):
 # Model notatki
 class Note(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(150), nullable=False)
-    text = db.Column(db.Text, nullable=False)
+    title = db.Column(db.String(), nullable=False)
+    text = db.Column(db.String(), nullable=False)
     is_public = db.Column(db.Boolean, default=False)
     is_encrypted = db.Column(db.Boolean, default=False)
+    is_shared = db.Column(db.Boolean, default=False)
     encryption_key = db.Column(db.String(200), nullable=True)
     signature = db.Column(db.String(200), nullable=True)
     # Relacja z użytkownikami

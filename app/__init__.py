@@ -6,9 +6,10 @@ from .database import db
 
 login_manager = LoginManager()
 
+
 def create_app():
     app = Flask(__name__)
-
+    migrate = Migrate(app, db)
     # app.config['SECRET_KEY'] = Config.SECRET_KEY
     # app.config['SQLALCHEMY_DATABASE_URI'] = Config.SQLALCHEMY_DATABASE_URL
 

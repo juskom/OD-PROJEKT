@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}Weryfikacja TOTP{% endblock %}
+
+{% block content %}
+<h1>Weryfikacja TOTP</h1>
+<p>Wprowadź kod z aplikacji uwierzytelniającej:</p>
+<form action="{{ url_for('auth.verify_totp') }}" method="POST">
+    <label for="token">Kod TOTP:</label>
+    <input type="text" id="token" name="token" required>
+    <button type="submit">Zweryfikuj</button>
+</form>
+{% endblock %}

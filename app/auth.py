@@ -4,16 +4,21 @@ from collections import Counter
 import re
 from copyreg import remove_extension
 from datetime import datetime, timedelta
+from functools import wraps
+from io import BytesIO
 
 from .database import db
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-from flask import Blueprint, render_template, request, redirect, flash, url_for, current_app
+from flask import Blueprint, render_template, request, redirect, flash, url_for, current_app, session
 
 # from .hello import user_loader
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from passlib.hash import sha256_crypt
 import bleach
+import pyotp
+import pyqrcode
+from pyotp import TOTP, random_base32
 
 from .models import User, Note, ConnectorNote
 
@@ -28,6 +33,8 @@ limiter = Limiter(
     get_remote_address,
     app=current_app
 )
+
+
 
 @auth.route('/login')
 def login():
@@ -52,8 +59,8 @@ def login_post():
         user.failed_login_attempts = 0
         user.last_login = datetime.now()
         db.session.commit()
-        login_user(user, remember=True)
-        return redirect(url_for('main.profile'))
+        login_user(user)
+        return redirect(url_for('auth.verify_totp'))
     else:
         user.failed_login_attempts += 1
         user.last_failed_login = datetime.now()
@@ -113,17 +120,72 @@ def register_post():
 
     hashed_password = sha256_crypt.hash(password)
     new_user = User(login=login, email=email, password=hashed_password)
+
+    #
+    totp_secret = pyotp.random_base32()
+    new_user.totp_secret = totp_secret
     db.session.add(new_user)
     db.session.commit()
+    # totp = pyotp.TOTP(totp_secret)
+    # qr_code_url = totp.provisioning_uri(name=login)
+    # qr_code = generate_qr_code(qr_code_url)
+    #
+    db.session.add(new_user)
+    db.session.commit()
+    login_user(new_user)
+    flash("Rejestracja przebiegła pomyślnie. Skonfiguruj 2FA, aby dokończyć proces.", "info")
+    return redirect(url_for('auth.setup_totp'))
 
-    flash("Rejestracja przebiegła pomyślnie", "success")
-    return redirect(url_for('auth.login'))
 
+@auth.route('/setup_totp', methods = ['GET', 'POST'])
+@login_required
+@limiter.limit("4/minute")
+def setup_totp():
+    # if current_user.totp_secret:
+    #     flash("TOTP jest już skonfigurowane", "info")
+    #     return redirect(url_for('main.profile'))
+    #
+    # totp_secret = pyotp.random_base32()
+    # totp = pyotp.TOTP(totp_secret)
+    totp_secret = current_user.totp_secret
+    totp = pyotp.TOTP(totp_secret)
+    qr_code_url = totp.provisioning_uri(name=current_user.login)
+    qr_code = generate_qr_code(qr_code_url)
+
+    return render_template("setup_totp.html", qr_code=qr_code, totp_secret=totp_secret)
+
+def generate_qr_code(uri):
+    qr_code = pyqrcode.create(uri)
+    stream = BytesIO()
+    qr_code.svg(stream, scale=5)
+    return stream.getvalue().decode('utf-8')
+
+@auth.route('/verify_totp', methods = ['GET', 'POST'])
+@login_required
+def verify_totp():
+    totp_secret = current_user.totp_secret
+    totp = pyotp.TOTP(totp_secret)
+    if request.method == 'POST':
+        token = bleach.clean(request.form.get('token'))
+        if totp.verify(token, valid_window=1):
+            current_user.is_verified = True
+            db.session.commit()
+            flash("Zostałeś zalogowany", "success")
+            return redirect(url_for('main.profile'))
+        else:
+            flash("Nieprawidłowy token", "danger")
+            return redirect(url_for('auth.verify_totp'))
+
+    return render_template('verify_totp.html')
 
 @auth.route('/logout')
 @login_required
 def logout():
+    current_user.is_verified = False
+    db.session.commit()
+
     logout_user()
+    flash("Zostałeś wylogowany", "info")
     return redirect('/')
 
 def calculate_entropy(d):

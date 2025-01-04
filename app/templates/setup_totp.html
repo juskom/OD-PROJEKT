@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Setup TOTP{% endblock %}
+
+{% block content %}
+<h1>Setup Two-Factor Authentication</h1>
+<p>To secure your account, please scan the QR code below with your authentication app (e.g., Google Authenticator or Authy).</p>
+
+<!-- Wyświetlenie QR kodu -->
+<div class="qr-code">
+    <img src="data:image/svg+xml;base64,{{ qr_code|safe }}" alt="QR Code">
+</div>
+
+<!-- Instrukcja dla użytkownika -->
+<h2>Manual Entry</h2>
+<p>If you cannot scan the QR code, enter this key into your app:</p>
+<p><strong>{{ totp_secret }}</strong></p>
+
+<!-- Link powrotu -->
+<a href="{{ url_for('main.profile') }}">Return to Profile</a>
+{% endblock %}

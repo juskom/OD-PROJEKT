@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Cześć {{ user.login }}</h1>
+    <hr>
+     <li>
+    <a href="{{ url_for('main.new_note') }}">Dodaj notatkę</a>
+    </li>
+    <li>
+    <a href="{{ url_for('main.my_notes') }}">Twoje notatki</a>
+    </li>
+    <li>
+    <a href="{{ url_for('main.shared_notes') }}">Udostępnione notatki</a>
+    </li>
+    <li>
+    <a href="{{ url_for('main.public_notes') }}">Publiczne notatki</a>
+    </li>
+</div>
+{% endblock %}

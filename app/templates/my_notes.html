@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Moje notatki</h1>
+
+{% if notes %}
+<table>
+    <thead>
+        <tr>
+            <th>Tytuł</th>
+            <th>Status</th>
+            <th>Opcje</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for note in notes %}
+        <tr>
+            <td>{{ note.title }}</td>
+            <td>
+                {% if note.is_public %}
+                    <span>Publiczna</span>
+                {% elif note.is_shared %}
+                    <span>Udostępniona</span>
+                {% else %}
+                    <span>Prywatna</span>
+                {% endif %}
+                {% if note.is_encrypted %}
+                    <span>| Zaszyfrowana</span>
+                {% endif %}
+            </td>
+            <td>
+                <!-- Przyciski do operacji na notatkach -->
+                {% if note.is_encrypted %}
+                    <form method="POST" action="{{ url_for('main.decrypt_note', note_id=note.id) }}" style="display: inline-block;">
+                        <input type="text" name="encryption_key" placeholder="Klucz odszyfrowania" required>
+                        <button type="submit">Odszyfruj</button>
+                    </form>
+                {% endif %}
+                <a href="{{ url_for('main.view_note', note_id=note.id) }}">Pokaż</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>Nie masz jeszcze żadnych notatek.</p>
+{% endif %}
+{% endblock %}
