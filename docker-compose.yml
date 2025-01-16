@@ -3,18 +3,24 @@ version: '3.9'
 services:
   app:
     build:
-      context: ./app # Ścieżka do katalogu z Dockerfile dla aplikacji Flask
+      context: . # Ścieżka do katalogu z Dockerfile dla aplikacji Flask
       dockerfile: Dockerfile
     #command:
+    expose:
+      - "5000"
     ports:
       - "5000:5000" # Mapowanie portów dla aplikacji Flask
     environment:
       - FLASK_ENV=production
+      - FLASK_APP=app
+    env_file:
+      - .env
     restart: always
 
   nginx:
     build:
       context: ./nginx # Ścieżka do katalogu z Dockerfile dla Nginx
+      dockerfile: Dockerfile
     ports:
       - "8080:80"   # HTTP
       - "443:443" # HTTPS

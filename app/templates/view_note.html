@@ -2,8 +2,8 @@
 
 {% block content %}
 <div class="note-container">
-    <h1>{{ note.title }}</h1>  <!-- Wyświetlanie tytułu notatki -->
-
+    <h1>{{ note.title }}</h1>
+    <h2>Autor: {{ note.author.login }}</h2>
     <div class="note-metadata">
         <p><strong>Status:</strong>
             {% if note.is_public %}
@@ -18,23 +18,31 @@
 
     <hr>
 
-    {% if note.is_encrypted %}
-        <div class="note-decryption">
-            <form method="POST" action="{{ url_for('main.view_note', note_id=note.id) }}">
-                <label for="encryption_key">Klucz odszyfrowania:</label>
-                <input type="text" name="encryption_key" id="encryption_key" placeholder="Wpisz klucz odszyfrowania" required>
-                <button type="submit">Odszyfruj</button>
-            </form>
-        </div>
-    {% else %}
-        <div class="note-content">
-            <!-- Renderowanie treści notatki jako HTML -->
+{#    {% if note.is_encrypted %}#}
+{#        <div class="note-decryption">#}
+{#            <form method="POST" action="{{ url_for('main.view_note', note_id=note.id) }}">#}
+{#                <label for="encryption_key">Klucz odszyfrowania:</label>#}
+{#                <input type="text" name="encryption_key" id="encryption_key" placeholder="Wpisz klucz odszyfrowania" required>#}
+{#                <button type="submit">Odszyfruj</button>#}
+{#            </form>#}
+{#        </div>#}
+{#    {% else %}#}
+    <div class="note-content">
             {{ rendered_content | safe }}
-        </div>
-    {% endif %}
+    </div>
+{#    {% endif %}#}
+
+<hr>
+<div>
+    <h4>Public Key (Base64):</h4>
+    <pre>{{ public_key }}</pre>
+    <h4>Signature (Base64):</h4>
+    <pre>{{ signature }}</pre>
+  </div>
+
 
     <div class="note-actions">
-        <a href="{{ url_for('main.my_notes') }}">Powrót do listy notatek</a>
+        <a href="{{ url_for('main.profile') }}">Powrót do profilu</a>
     </div>
 </div>
 {% endblock %}

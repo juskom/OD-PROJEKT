@@ -1,4 +1,3 @@
-
 FROM nginx:latest
 
 #COPY ./ssl /etc/ssl/

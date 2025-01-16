@@ -4,6 +4,10 @@
 <div class="container mt-5">
     <h1>Cześć {{ user.login }}</h1>
     <hr>
+    <h4>Ostatnie logowanie:</h4>
+    <p>{{ user.last_login }}</p>
+    <h4>Ostatnie nieudane logowanie:</h4>
+    <p>{{ user.last_failed_login }}</p>
      <li>
     <a href="{{ url_for('main.new_note') }}">Dodaj notatkę</a>
     </li>

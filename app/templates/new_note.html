@@ -4,35 +4,30 @@
 <h1>Dodaj nową notatkę</h1>
 
 <form action="{{ url_for('main.new_note_post') }}" method="post">
-    <!-- Tytuł -->
     <div>
         <label for="title">Tytuł:</label>
         <input type="text" id="title" name="title" placeholder="Wpisz tytuł notatki" required>
     </div>
 
-    <!-- Treść notatki -->
     <div>
         <label for="text">Treść notatki:</label>
         <textarea id="text" name="text" rows="20" cols="100" placeholder="Wpisz treść notatki" required></textarea>
     </div>
 
-    <!-- Publiczność -->
     <div>
         <label for="is_public">Czy notatka ma być publiczna?</label>
         <input type="checkbox" id="is_public" name="is_public">
     </div>
 
-    <!-- Szyfrowanie -->
     <div>
         <label for="is_encrypted">Czy notatka ma być szyfrowana?</label>
         <input type="checkbox" id="is_encrypted" name="is_encrypted" onchange="toggleEncryptionKey(this)">
         <div id="encryption-key-field" style="display: none;">
             <label for="encryption_key">Klucz szyfrowania:</label>
-            <input type="text" id="encryption_key" name="encryption_key" placeholder="Wpisz klucz szyfrowania">
+            <input type="password" id="encryption_key" name="encryption_key" placeholder="Wpisz klucz szyfrowania">
         </div>
     </div>
 
-    <!-- Udostępnianie -->
     <div>
         <label for="is_shared">Czy notatka ma być udostępniona innym użytkownikom?</label>
         <input type="checkbox" id="is_shared" name="is_shared" onchange="toggleSharedWith(this)">
@@ -42,7 +37,6 @@
         </div>
     </div>
 
-    <!-- Submit -->
     <div>
         <button type="submit">Dodaj notatkę</button>
     </div>

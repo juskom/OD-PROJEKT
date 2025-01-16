@@ -1,28 +1,25 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>Moje notatki</h1>
+<h1>Publiczne notatki</h1>
 
-{% if notes %}
+{% if public_notes %}
 <table>
     <thead>
         <tr>
             <th>Tytuł</th>
-            <th>Status</th>
+            <th>Autor</th>
             <th>Opcje</th>
         </tr>
     </thead>
     <tbody>
-        {% for note in notes %}
+        {% for note in public_notes %}
         <tr>
             <td>{{ note.title }}</td>
+            <td>{{ note.author.login }}</td>
             <td>
                 {% if note.is_public %}
                     <span>Publiczna</span>
-                {% elif note.is_shared %}
-                    <span>Udostępniona</span>
-                {% else %}
-                    <span>Prywatna</span>
                 {% endif %}
                 {% if note.is_encrypted %}
                     <span>| Zaszyfrowana</span>
@@ -43,7 +40,7 @@
     </tbody>
 </table>
 {% else %}
-<p>Nie masz jeszcze żadnych notatek.</p>
+<p>Nie ma jeszcze żadnych publicznych notatek.</p>
     <div class="note-actions">
         <a href="{{ url_for('main.profile') }}">Powrót do profilu</a>
     </div>

@@ -4,18 +4,20 @@
 
 {% block content %}
 <h1>Setup Two-Factor Authentication</h1>
-<p>To secure your account, please scan the QR code below with your authentication app (e.g., Google Authenticator or Authy).</p>
+<p>Zeskanuj kod QR za pomocą aplikacji uwierzytelniającej (e.g., Google Authenticator, Microsoft Authenticator), by móc później zalogować się do swojego konta.</p>
 
-<!-- Wyświetlenie QR kodu -->
 <div class="qr-code">
     <img src="data:image/svg+xml;base64,{{ qr_code|safe }}" alt="QR Code">
 </div>
 
-<!-- Instrukcja dla użytkownika -->
 <h2>Manual Entry</h2>
-<p>If you cannot scan the QR code, enter this key into your app:</p>
+<p>Jeśłi nie możesz zeskanować kodu QR, wprowadź poniższy kod:</p>
 <p><strong>{{ totp_secret }}</strong></p>
 
-<!-- Link powrotu -->
-<a href="{{ url_for('main.profile') }}">Return to Profile</a>
+<form method="POST">
+    <label for="totp_code">Wpisz kod TOTP:</label>
+    <input type="text" id="totp_code" name="totp_code" required>
+    <button type="submit">Zatwierdź</button>
+</form>
+
 {% endblock %}
