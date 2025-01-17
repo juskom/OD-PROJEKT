@@ -14,6 +14,6 @@
     <input type="text" id="token" name="token" required>
     <button type="submit">Login</button>
 </form>
-<p>Don't have an account? <a href="{{ url_for('auth.register') }}">Register</a></p>
-<p>Forgot your password? <a href="{{ url_for('auth.reset_password_request') }}">Reset Password</a></p>
+<p>Nie masz jeszcze konta? <a href="{{ url_for('auth.register') }}">Register</a></p>
+<p>Zapomniałeś hasła? <a href="{{ url_for('auth.reset_password_request') }}">Reset Password</a></p>
 {% endblock %}

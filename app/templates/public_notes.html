@@ -28,7 +28,7 @@
             <td>
                 {% if note.is_encrypted %}
                     <form method="POST" action="{{ url_for('main.view_note', note_id=note.id) }}" style="display: inline-block;">
-                        <input type="text" name="encryption_key" placeholder="Klucz odszyfrowania" required>
+                        <input type="password" name="encryption_key" placeholder="Klucz odszyfrowania" required>
                         <button type="submit">Odszyfruj i pokaż</button>
                     </form>
                 {% else %}

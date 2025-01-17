@@ -19,8 +19,6 @@ class User(UserMixin, db.Model):
     notes = db.relationship('Note', backref='author', lazy=True)
     shared_notes = db.relationship('ConnectorNote', backref='user', lazy=True)
 
-
-
 class Note(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(), nullable=False)
@@ -35,12 +33,3 @@ class ConnectorNote(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     userID = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     noteID = db.Column(db.Integer, db.ForeignKey('note.id'), nullable=False)
-
-
-# class ResetPasswordToken(db.Model):
-#     id = db.Column(db.Integer, primary_key=True)
-#     token = db.Column(db.String(200), nullable=False)
-#     timestamp = db.Column(db.DateTime, default=datetime.now, nullable=False)
-#     expiration = db.Column(db.DateTime, nullable=False)
-#     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-#     user = db.relationship('User', backref='reset_password_token')

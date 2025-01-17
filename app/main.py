@@ -1,15 +1,12 @@
-import os
+
 import re
 from base64 import b64encode
-from inspect import signature
-# from functools import wraps
-from flask import Blueprint, render_template, redirect, url_for, request, flash, abort
+from flask import Blueprint, render_template, redirect, url_for, request, flash, abort, session
 from flask_login import login_required, current_user
 from sqlalchemy import and_
-from .auth import SERVER_SECRET
+from .auth import SERVER_SECRET, limiter, totp_verified
 from .models import User, Note, ConnectorNote
 from .database import db
-# from .auth import verify_password, verify_totp, password_strength_check
 import cryptocode
 import markdown
 import bleach
@@ -24,41 +21,17 @@ NOTE_REGEX = r"^[a-zA-Z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ .,!?\-\(\)\[\]{}:
 main = Blueprint('main', __name__)
 
 
-# def requires_verification(f):
-#     @wraps(f)
-#     def decorated_function(*args, **kwargs):
-#         if not current_user.is_verified:
-#             flash("Musisz przejść weryfikację 2FA, aby uzyskać dostęp.", "warning")
-#             return redirect(url_for('auth.verify_totp'))
-#         return f(*args, **kwargs)
-#
-#     return decorated_function
-#
-
-
 @main.route('/')
 def index():
     return render_template('index.html')
-    # return 'Index'
-
 
 @main.route('/profile')
 @login_required
-# @requires_verification
+@totp_verified
 def profile():
-    # if current_user.is_verified:
-    # # user_notes = Note.query.filter_by(userID=current_user.id).all()
-    # # return render_template('profile.html', user=current_user, user_notes=user_notes)
-    # else:
-    #     flash("Please verify your account", "warning")
-    #     return redirect(url_for('auth.verify_totp'))
-
     user_notes = Note.query.filter_by(userID=current_user.id).all()
-
     public_notes = Note.query.filter(Note.is_public == True, Note.userID != current_user.id).all()
-
     shared_notes = Note.query.join(ConnectorNote).filter(ConnectorNote.userID == current_user.id).all()
-
     encrypted_notes = [note for note in user_notes if note.is_encrypted]
 
     return render_template(
@@ -70,17 +43,16 @@ def profile():
         encrypted_notes=encrypted_notes
     )
 
-
 @main.route('/new_note')
 @login_required
-# @requires_verification
+@totp_verified
 def new_note():
     return render_template('new_note.html', user=current_user)
 
-
+@limiter.limit("10 per minute")
 @main.route('/new_note', methods=['POST'])
 @login_required
-# @requires_verification
+@totp_verified
 def new_note_post():
 
     title = bleach.clean(request.form.get('title'))
@@ -99,7 +71,6 @@ def new_note_post():
         flash('Nieprawidłowy znak w tytule', 'warning')
         return redirect(url_for('main.new_note'))
 
-        # Szyfrowanie notatki, jeśli wybrano
     if is_encrypted:
         if not encryption_key:
             flash('Nie podano klucza do zaszyfrowania', 'Warning')
@@ -108,21 +79,15 @@ def new_note_post():
             flash('Nieprawidłowy znak w kluczu', 'warning')
             return redirect(url_for('main.new_note'))
         text = cryptocode.encrypt(text, encryption_key)
-        # encryption_key = bcrypt.hashpw(encryption_key.encode('utf-8'), bcrypt.gensalt())
-
 
     if is_shared:
         if not shared_with_raw:
             flash("Uzupełnij loginy osób, którym chcesz udostępnić notatkę", "Warning")
             return redirect(url_for('main.new_note'))
-        #shared_with_raw = bleach.clean(shared_with_raw)
+        shared_with_raw = bleach.clean(shared_with_raw)
         shared_with = shared_with_raw.split(" ")
 
-
-    # rendered = markdown.markdown(text)
-    # sanitized_rendered = sanitize_html(rendered)
     signature = sign_note_content(text, current_user.private_key)
-    # new_note = Note(title=title, text=text, is_public=is_public, userID=current_user.id, is_encrypted=is_encrypted, is_shared=is_shared,encryption_key=encryption_key)
     new_note = Note(title=title, text=text, is_public=is_public, userID=current_user.id, is_encrypted=is_encrypted, is_shared=is_shared, signature=signature)
     db.session.add(new_note)
     db.session.commit()
@@ -139,13 +104,12 @@ def new_note_post():
 
     flash("Notatka dodana pomyślnie!", "success")
 
-
     return redirect(url_for('main.profile'))
 
 
 @main.route('/public_notes')
 @login_required
-# @requires_verification
+@totp_verified
 def public_notes():
 
     public_notes = Note.query.filter(and_(Note.is_public == True, Note.userID != current_user.id)).all()
@@ -155,7 +119,7 @@ def public_notes():
 
 @main.route('/my_notes')
 @login_required
-# @requires_verification
+@totp_verified
 def my_notes():
     user_notes = Note.query.filter_by(userID=current_user.id).all()
     return render_template('my_notes.html', notes=user_notes)
@@ -163,32 +127,27 @@ def my_notes():
 
 @main.route('/shared_notes')
 @login_required
-# @requires_verification
+@totp_verified
 def shared_notes():
     shared_notes = Note.query.join(ConnectorNote).filter(ConnectorNote.userID == current_user.id).all()
     return render_template('shared_notes.html', notes=shared_notes)
 
 
-# @main.route('/validate_password', methods=['POST'])
-# @login_required
-# def validate_password():
-#     password = request.form['password']
-#     if not verify_password(password, current_user.password):
-#         flash("Invalid password", "error")
-#         return redirect(url_for('main.profile'))
-#
-#     flash("Password is correct", "success")
-#     return redirect(url_for('main.profile'))
-
-
-
+@limiter.limit("5 per minute")
 @main.route('/notes/<int:note_id>', methods = ["GET", "POST"])
 @login_required
-# @requires_verification
+@totp_verified
 def view_note(note_id):
 
     note = Note.query.get(note_id)
     text = note.text
+    failed_view_attempts = session.get(f"failed_decryptions_{note_id}", 0)
+    max_failed_view_attempts = 5
+
+    if failed_view_attempts > max_failed_view_attempts:
+        flash("Przekroczyłeś maksymalną liczbę prób deszyfrowania. Spróbuj później.", "error")
+        return redirect(url_for('main.profile'))
+
     if note is None:
         flash("Notatka nieznaleziona", "Danger")
         return redirect(url_for('main.profile'))
@@ -201,6 +160,7 @@ def view_note(note_id):
         decrypted_text = cryptocode.decrypt(note.text, encryption_key)
 
         if decrypted_text is False:
+            session[f"failed_decryptions_{note_id}"] = failed_view_attempts + 1
             flash("Nieprawidłowy klucz", "error")
             return redirect(url_for('main.profile'))
         else:
@@ -213,21 +173,16 @@ def view_note(note_id):
         rendered = markdown.markdown(text if text else "")
 
         sanitized_rendered = sanitize_html(rendered)
-
+        signature_base64 = None
+        public_key_base64 = None
         if note.signature:
             if not verify_signature(text, note.signature, note.author.public_key):
                 flash("Podpis cyfrowy nie jest zgodny.", "warning")
             public_key_base64 = b64encode(note.author.public_key).decode()
             signature_base64 = b64encode(note.signature).decode()
-            # print(RSA.import_key(note.author.private_key, passphrase=SERVER_SECRET).export_key())
-            # print(signature_base64)
-            # print(public_key_base64)
-            # print(note.author.public_key.decode())
         return render_template('view_note.html', note=note, rendered_content=sanitized_rendered, signature=signature_base64, public_key=public_key_base64)
-
     else:
-        flash("Nie masz dostępu do tej notatki.", "error")
-        return redirect(url_for('main.profile'))
+        return "Nie masz dostępu do tej notatki.", 403
 
 
 def sanitize_html(raw_html):
