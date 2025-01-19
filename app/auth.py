@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 from io import BytesIO
 from os import abort
-
+import logging
 from .database import db
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask import Blueprint, render_template, request, redirect, flash, url_for, current_app, session
@@ -39,7 +39,8 @@ MAX_FAILED_ATTEMPTS_IP = 5
 MAX_TOTAL_FAILED_ATTEMPTS = 10
 BLOCK_TIME = timedelta(minutes=5)
 
-
+auth_logger = logging.getLogger('auth')
+auth_logger.setLevel(logging.DEBUG)
 
 limiter = Limiter(
     get_remote_address,
@@ -242,6 +243,7 @@ def send_reset_password_email(user):
     token = generate_reset_password_token(user)
     reset_password_url = url_for('auth.reset_password', token=token, user_id=user.id,_external=True)
     print(f"Reset password URL for {user.login}: {reset_password_url}")
+    auth_logger.debug(f"Reset password URL for {user.login}: {reset_password_url}")
 
 def generate_reset_password_token(user):
     serializer = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])

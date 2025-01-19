@@ -161,7 +161,14 @@ def view_note(note_id):
         flash("Notatka nieznaleziona", "Danger")
         return redirect(url_for('main.profile'))
 
-    text = note.text
+    if not (note.is_public or note.userID == current_user.id or (note.is_shared and ConnectorNote.query.filter_by(userID=current_user.id, noteID=note.id).first())):
+        return "Access forbiden.", 400
+
+    if request.method == "GET":
+        if note.is_encrypted:
+            return "Access forbiden.", 403
+        else:
+            return render_note_content(note, note.text)
 
     if request.method == "POST":
         if note.is_encrypted:
@@ -181,25 +188,29 @@ def view_note(note_id):
                 return redirect(url_for('main.profile'))
             else:
                 reset_failed_view_attempts_ip(current_user.id)
-                text = decrypted_text
+                return render_note_content(note, decrypted_text)
 
-    else:
-        text = note.text
 
-    if note.is_public or note.userID == current_user.id or (note.is_shared and current_user in note.connectornote):
-        rendered = markdown.markdown(text if text else "")
+def render_note_content(note, text):
+    rendered = markdown.markdown(text if text else "")
+    sanitized_rendered = sanitize_html(rendered)
 
-        sanitized_rendered = sanitize_html(rendered)
-        signature_base64 = None
-        public_key_base64 = None
-        if note.signature:
-            if not verify_signature(text, note.signature, note.author.public_key):
-                flash("Podpis cyfrowy nie jest zgodny.", "warning")
-            public_key_base64 = b64encode(note.author.public_key).decode()
-            signature_base64 = b64encode(note.signature).decode()
-        return render_template('view_note.html', note=note, rendered_content=sanitized_rendered, signature=signature_base64, public_key=public_key_base64)
-    else:
-        return "Access forbiden.", 403
+    signature_base64 = None
+    public_key_base64 = None
+    if note.signature:
+        if not verify_signature(text, note.signature, note.author.public_key):
+            flash("Podpis cyfrowy nie jest zgodny.", "warning")
+        public_key_base64 = b64encode(note.author.public_key).decode() if note.author.public_key else None
+        signature_base64 = b64encode(note.signature).decode() if note.signature else None
+
+    return render_template(
+        'view_note.html',
+        note=note,
+        rendered_content=sanitized_rendered,
+        signature=signature_base64,
+        public_key=public_key_base64
+    )
+
 
 
 def sanitize_html(raw_html):

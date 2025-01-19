@@ -1,6 +1,5 @@
 import os
 from datetime import timedelta
-
 from flask import Flask, request
 from flask_login import LoginManager
 
@@ -13,6 +12,10 @@ login_manager = LoginManager()
 
 def create_app():
     app = Flask(__name__)
+
+
+
+
     app.config.update(
         SESSION_COOKIE_SECURE=True,
         SESSION_COOKIE_HTTPONLY=True,
