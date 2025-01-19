@@ -36,6 +36,7 @@ SERVER_SECRET = os.getenv('SERVER_SECRET')
 failed_login_attempts = defaultdict(list)
 
 MAX_FAILED_ATTEMPTS_IP = 5
+MAX_TOTAL_FAILED_ATTEMPTS = 10
 BLOCK_TIME = timedelta(minutes=5)
 
 
@@ -48,7 +49,6 @@ limiter = Limiter(
 def is_ip_banned(ip_address):
     if ip_address in failed_login_attempts:
         failed_login_attempts[ip_address] = [timestamp for timestamp in failed_login_attempts[ip_address] if datetime.now() - timestamp < BLOCK_TIME]
-
         if len(failed_login_attempts[ip_address]) >= MAX_FAILED_ATTEMPTS_IP:
             return True
     return False
@@ -70,10 +70,12 @@ def totp_verified(f):
 
     return decorated_function
 
+@limiter.limit("5 per minute")
 @auth.route('/login')
 def login():
     return render_template('login.html')
 
+@limiter.limit("5 per minute")
 @auth.route('/login', methods=["POST"])
 def login_post():
     time.sleep(1)
@@ -171,9 +173,9 @@ def register_post():
         return redirect(url_for('auth.register'))
 
     salt, hashed_password = hash_password(password)
+    time.sleep(1)
     private_key, public_key = generate_rsa_keys()
     totp_secret = pyotp.random_base32()
-    #private_key = private_key.decode()
     new_user = User(login=login, email=email, password=hashed_password, salt=salt, private_key=private_key, public_key=public_key, totp_secret=totp_secret)
     db.session.add(new_user)
     db.session.commit()
@@ -183,7 +185,7 @@ def register_post():
 
 @auth.route('/setup_totp', methods = ['GET', 'POST'])
 @login_required
-@limiter.limit("4/minute")
+@limiter.limit("5/minute")
 def setup_totp():
     if current_user.is_verified:
         flash("TOTP jest już skonfigurowane", "info")
@@ -212,24 +214,6 @@ def generate_qr_code(uri):
     stream = BytesIO()
     qr_code.svg(stream, scale=5)
     return stream.getvalue().decode('utf-8')
-
-@auth.route('/verify_totp', methods = ['GET', 'POST'])
-@login_required
-def verify_totp():
-    totp_secret = current_user.totp_secret
-    totp = pyotp.TOTP(totp_secret)
-    if request.method == 'POST':
-        token = bleach.clean(request.form.get('token'))
-        if totp.verify(token, valid_window=1):
-            current_user.is_verified = True
-            db.session.commit()
-            flash("Zostałeś zalogowany", "success")
-            return redirect(url_for('main.profile'))
-        else:
-            flash("Nieprawidłowy token", "danger")
-            return redirect(url_for('auth.verify_totp'))
-
-    return render_template('verify_totp.html')
 
 @auth.route('/logout')
 @login_required
@@ -272,7 +256,7 @@ def reset_password(token, user_id):
     user = validate_reset_password_token(token, user_id)
     if not user:
         update_failed_login_attempts_ip(request.remote_addr)
-        abort(404, description="Invalid token")
+        abort(406, description="Invalid token")
 
     if request.method == "POST":
         password = bleach.clean(request.form.get("password"))
@@ -291,6 +275,7 @@ def reset_password(token, user_id):
             flash("Hasło jest zbyt słabe: musi zawierać przynajmniej jedną dużą literę, jedną małą literę, jedną cyfrę oraz jeden znak specjalny", "warning")
             return redirect(url_for('auth.reset_password', token=token, user_id=user_id))
         salt, hashed_password = hash_password(password)
+        time.sleep(1)
         user.password = hashed_password
         user.salt = salt
         db.session.commit()

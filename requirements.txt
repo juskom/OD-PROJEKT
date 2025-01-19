@@ -13,4 +13,5 @@ bleach_allowlist
 markdown
 itsdangerous
 pycryptodome
+python-dotenv
 

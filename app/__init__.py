@@ -3,11 +3,12 @@ from datetime import timedelta
 
 from flask import Flask, request
 from flask_login import LoginManager
+
+from .auth import limiter
 from .database import db
 
 
 login_manager = LoginManager()
-
 
 
 def create_app():
@@ -21,12 +22,14 @@ def create_app():
     )
 
     db.init_app(app)
+    limiter.init_app(app)
 
     from .main import main as main_blueprint
     app.register_blueprint(main_blueprint)
 
     from .auth import auth as auth_blueprint
     app.register_blueprint(auth_blueprint, url_prefix='/auth')
+
 
     from .models import User, Note, ConnectorNote
 

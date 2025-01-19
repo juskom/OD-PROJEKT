@@ -28,6 +28,7 @@ class Note(db.Model):
     signature = db.Column(db.String(200), nullable=True)
     userID = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     is_shared = db.Column(db.Boolean, default=False)
+    shared_with = db.relationship('ConnectorNote', backref='note', lazy=True)
 
 class ConnectorNote(db.Model):
     id = db.Column(db.Integer, primary_key=True)

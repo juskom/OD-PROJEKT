@@ -1,6 +1,10 @@
 
 import re
+import time
 from base64 import b64encode
+from collections import defaultdict
+from datetime import timedelta, datetime
+
 from flask import Blueprint, render_template, redirect, url_for, request, flash, abort, session
 from flask_login import login_required, current_user
 from sqlalchemy import and_
@@ -17,9 +21,16 @@ from Crypto.Hash import SHA256
 
 
 NOTE_REGEX = r"^[a-zA-Z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ .,!?\-\(\)\[\]{}:;]*$"
+PASSWORD_REGEX = r'^[a-zA-Z0-9!@#$%^&*()_+-=]+$'
+STRENGTH_PASSWORD_REGEX = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$'
 
 main = Blueprint('main', __name__)
 
+
+failed_view_attempts = defaultdict(list)
+
+MAX_FAILED_ATTEMPTS_USER = 5
+BLOCK_TIME = timedelta(minutes=5)
 
 @main.route('/')
 def index():
@@ -71,14 +82,20 @@ def new_note_post():
         flash('Nieprawidłowy znak w tytule', 'warning')
         return redirect(url_for('main.new_note'))
 
+    signature = sign_note_content(text, current_user.private_key)
+
     if is_encrypted:
         if not encryption_key:
             flash('Nie podano klucza do zaszyfrowania', 'Warning')
             return redirect(url_for('main.new_note'))
-        if not re.fullmatch(NOTE_REGEX, encryption_key):
-            flash('Nieprawidłowy znak w kluczu', 'warning')
+        if not re.match(PASSWORD_REGEX, encryption_key):
+            flash("Hasło zawiera niedozwolone znaki: dozwolone tylko litery, cyfry oraz !@#$%^&*()_+-=", "warning")
+            return redirect(url_for('main.new_note'))
+        if not re.match(STRENGTH_PASSWORD_REGEX, encryption_key):
+            flash("Hasło jest zbyt słabe: musi zawierać przynajmniej jedną dużą literę, jedną małą literę, jedną cyfrę oraz jeden znak specjalny","warning")
             return redirect(url_for('main.new_note'))
         text = cryptocode.encrypt(text, encryption_key)
+        time.sleep(1)
 
     if is_shared:
         if not shared_with_raw:
@@ -87,7 +104,7 @@ def new_note_post():
         shared_with_raw = bleach.clean(shared_with_raw)
         shared_with = shared_with_raw.split(" ")
 
-    signature = sign_note_content(text, current_user.private_key)
+
     new_note = Note(title=title, text=text, is_public=is_public, userID=current_user.id, is_encrypted=is_encrypted, is_shared=is_shared, signature=signature)
     db.session.add(new_note)
     db.session.commit()
@@ -130,7 +147,7 @@ def my_notes():
 @totp_verified
 def shared_notes():
     shared_notes = Note.query.join(ConnectorNote).filter(ConnectorNote.userID == current_user.id).all()
-    return render_template('shared_notes.html', notes=shared_notes)
+    return render_template('shared_notes.html', shared_notes=shared_notes)
 
 
 @limiter.limit("5 per minute")
@@ -140,31 +157,31 @@ def shared_notes():
 def view_note(note_id):
 
     note = Note.query.get(note_id)
-    text = note.text
-    failed_view_attempts = session.get(f"failed_decryptions_{note_id}", 0)
-    max_failed_view_attempts = 5
-
-    if failed_view_attempts > max_failed_view_attempts:
-        flash("Przekroczyłeś maksymalną liczbę prób deszyfrowania. Spróbuj później.", "error")
-        return redirect(url_for('main.profile'))
-
     if note is None:
         flash("Notatka nieznaleziona", "Danger")
         return redirect(url_for('main.profile'))
 
-    if note.is_encrypted:
-        encryption_key = request.form.get('encryption_key')
-        if not encryption_key:
-            abort(400, description="Brak wymaganego klucza szyfrowania.")
+    text = note.text
 
-        decrypted_text = cryptocode.decrypt(note.text, encryption_key)
+    if request.method == "POST":
+        if note.is_encrypted:
+            if is_user_banned(current_user.id):
+                flash("Przekroczyłeś maksymalną liczbę prób deszyfrowania. Spróbuj później.", "error")
+                return redirect(url_for('main.profile'))
 
-        if decrypted_text is False:
-            session[f"failed_decryptions_{note_id}"] = failed_view_attempts + 1
-            flash("Nieprawidłowy klucz", "error")
-            return redirect(url_for('main.profile'))
-        else:
-            text = decrypted_text
+            encryption_key = request.form.get('encryption_key')
+            if not encryption_key:
+                abort(400, description="Brak wymaganego klucza szyfrowania.")
+            time.sleep(1)
+            decrypted_text = cryptocode.decrypt(note.text, encryption_key)
+
+            if decrypted_text is False:
+                update_failed_view_attempts_user(current_user.id)
+                flash("Nieprawidłowy klucz", "error")
+                return redirect(url_for('main.profile'))
+            else:
+                reset_failed_view_attempts_ip(current_user.id)
+                text = decrypted_text
 
     else:
         text = note.text
@@ -182,7 +199,7 @@ def view_note(note_id):
             signature_base64 = b64encode(note.signature).decode()
         return render_template('view_note.html', note=note, rendered_content=sanitized_rendered, signature=signature_base64, public_key=public_key_base64)
     else:
-        return "Nie masz dostępu do tej notatki.", 403
+        return "Access forbiden.", 403
 
 
 def sanitize_html(raw_html):
@@ -210,3 +227,19 @@ def verify_signature(text, signature, public_key):
         return True
     except (ValueError, TypeError):
         return False
+
+
+def update_failed_view_attempts_user(user_id):
+    failed_view_attempts[user_id].append(datetime.now())
+
+def reset_failed_view_attempts_ip(user_id):
+    if user_id in failed_view_attempts:
+        failed_view_attempts[user_id] = []
+
+def is_user_banned(user_id):
+    if user_id in failed_view_attempts:
+        failed_view_attempts[user_id] = [timestamp for timestamp in failed_view_attempts[user_id] if datetime.now() - timestamp < BLOCK_TIME]
+
+        if len(failed_view_attempts[user_id]) >= MAX_FAILED_ATTEMPTS_USER:
+            return True
+    return False
