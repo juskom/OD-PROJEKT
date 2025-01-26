@@ -5,7 +5,7 @@ from base64 import b64encode
 from collections import defaultdict
 from datetime import timedelta, datetime
 
-from flask import Blueprint, render_template, redirect, url_for, request, flash, abort, session
+from flask import Blueprint, render_template, redirect, url_for, request, flash, session
 from flask_login import login_required, current_user
 from sqlalchemy import and_
 from .auth import SERVER_SECRET, limiter, totp_verified
@@ -22,7 +22,8 @@ from Crypto.Hash import SHA256
 
 NOTE_REGEX = r"^[a-zA-Z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ .,!?\-\(\)\[\]{}:;]*$"
 PASSWORD_REGEX = r'^[a-zA-Z0-9!@#$%^&*()_+-=]+$'
-STRENGTH_PASSWORD_REGEX = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$'
+STRENGTH_PASSWORD_REGEX = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,65}$'
+MAX_NOTE_SIZE = 1000000
 
 main = Blueprint('main', __name__)
 
@@ -78,10 +79,17 @@ def new_note_post():
         flash("Tytuł i notatka nie mogą być puste", "error")
         return redirect(url_for('main.new_note'))
 
+    if len(title) > 100:
+        flash("Tytuł jest za długi", "error")
+        return redirect(url_for('main.new_note'))
     if not re.fullmatch(NOTE_REGEX, title):
         flash('Nieprawidłowy znak w tytule', 'warning')
         return redirect(url_for('main.new_note'))
 
+
+    if len(text.encode('utf-8')) > MAX_NOTE_SIZE:
+        flash(f"Notatka jest za duża.", "error")
+        return redirect(url_for('main.new_note'))
     signature = sign_note_content(text, current_user.private_key)
 
     if is_encrypted:
@@ -93,6 +101,9 @@ def new_note_post():
             return redirect(url_for('main.new_note'))
         if not re.match(STRENGTH_PASSWORD_REGEX, encryption_key):
             flash("Hasło jest zbyt słabe: musi zawierać przynajmniej jedną dużą literę, jedną małą literę, jedną cyfrę oraz jeden znak specjalny","warning")
+            return redirect(url_for('main.new_note'))
+        if len(encryption_key) > 64:
+            flash("Podaj inne hasło", "warning")
             return redirect(url_for('main.new_note'))
         text = cryptocode.encrypt(text, encryption_key)
         time.sleep(1)
@@ -159,10 +170,10 @@ def view_note(note_id):
     note = Note.query.get(note_id)
     if note is None:
         flash("Notatka nieznaleziona", "Danger")
-        return redirect(url_for('main.profile'))
+        return redirect(url_for('main.profile')), 404
 
     if not (note.is_public or note.userID == current_user.id or (note.is_shared and ConnectorNote.query.filter_by(userID=current_user.id, noteID=note.id).first())):
-        return "Access forbiden.", 400
+        return "Access forbiden.", 403
 
     if request.method == "GET":
         if note.is_encrypted:
@@ -174,12 +185,13 @@ def view_note(note_id):
         if note.is_encrypted:
             if is_user_banned(current_user.id):
                 flash("Przekroczyłeś maksymalną liczbę prób deszyfrowania. Spróbuj później.", "error")
-                return redirect(url_for('main.profile'))
+                return redirect(url_for('main.profile')), 403
 
             encryption_key = request.form.get('encryption_key')
             if not encryption_key:
-                abort(400, description="Brak wymaganego klucza szyfrowania.")
+                return "Brak wymaganego klucza szyfrowania.", 400
             time.sleep(1)
+
             decrypted_text = cryptocode.decrypt(note.text, encryption_key)
 
             if decrypted_text is False:
@@ -212,15 +224,12 @@ def render_note_content(note, text):
     )
 
 
-
 def sanitize_html(raw_html):
     sanitized_html = bleach.clean(
         raw_html,
         tags=markdown_tags,
         attributes=markdown_attrs,
-        #styles=all_styles,
         strip=False,
-        #css_sanitizer=css_sanitizer
     )
     return sanitized_html
 

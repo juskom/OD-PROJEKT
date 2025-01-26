@@ -6,7 +6,7 @@ from .database import db
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     login = db.Column(db.String(150), unique=True, nullable=False)
-    email = db.Column(db.String(150), unique=True, nullable=False)
+    email = db.Column(db.String(250), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
     salt = db.Column(db.String())
     totp_secret = db.Column(db.String(100))
@@ -21,8 +21,8 @@ class User(UserMixin, db.Model):
 
 class Note(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(), nullable=False)
-    text = db.Column(db.String(), nullable=False)
+    title = db.Column(db.String(100), nullable=False)
+    text = db.Column(db.Text(), nullable=False)
     is_public = db.Column(db.Boolean, default=False)
     is_encrypted = db.Column(db.Boolean, default=False)
     signature = db.Column(db.String(200), nullable=True)

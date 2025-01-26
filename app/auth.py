@@ -6,7 +6,6 @@ import re
 from datetime import datetime, timedelta
 from functools import wraps
 from io import BytesIO
-from os import abort
 import logging
 from .database import db
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -25,10 +24,11 @@ from .models import User, Note, ConnectorNote
 
 auth = Blueprint('auth', __name__)
 
-LOGIN_REGEX = r'^[a-zA-Z0-9]+$'
+LOGIN_REGEX = r'^[a-zA-Z0-9]{5,150}$'
 PASSWORD_REGEX = r'^[a-zA-Z0-9!@#$%^&*()_+-=]+$'
-STRENGTH_PASSWORD_REGEX = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$'
+STRENGTH_PASSWORD_REGEX = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,65}$'
 EMAIL_REGEX = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+TOTP_CODE_REGEX = r'^[0-9]{6}$'
 
 pepper = os.getenv('PEPPER')
 SERVER_SECRET = os.getenv('SERVER_SECRET')
@@ -137,9 +137,9 @@ def register_post():
     password = bleach.clean(request.form.get("password"))
     password2 = bleach.clean(request.form.get("password2"))
 
-    if len(login) < 3:
+    if len(login) < 5:
         error = True
-        flash("Login jest za krótki: min. 3 znaki", "warning")
+        flash("Login jest za krótki: min. 5 znaków", "warning")
 
     if password != password2:
         error = True
@@ -149,9 +149,20 @@ def register_post():
         error = True
         flash("Hasło jest za krótkie: min. 8 znaków", "warning")
 
+    if len(password) > 64:
+        error = True
+        flash("Podaj inne hasło", "warning")
+
+    if len(email) > 60:
+        error = True
+        flash("Email jest za długi", "warning")
+
     if not re.match(LOGIN_REGEX, login):
         error = True
         flash("Login zawiera niedozwolone znaki: dozwolone tylko litery i cyfry", "warning")
+    if (len(login) > 150):
+        error = True
+        flash("Login jest za długi.", "warning")
 
     if not re.match(EMAIL_REGEX, email):
         error = True
@@ -163,7 +174,7 @@ def register_post():
 
     if not re.match(STRENGTH_PASSWORD_REGEX, password):
         error = True
-        flash("Hasło jest zbyt słabe: musi zawierać przynajmniej jedną dużą literę, jedną małą literę, jedną cyfrę oraz jeden znak specjalny", "warning")
+        flash("Hasło musi zawierać przynajmniej jedną dużą literę, jedną małą literę, jedną cyfrę oraz jeden znak specjalny", "warning")
 
     if error:
         return redirect(url_for('auth.register'))
@@ -199,6 +210,13 @@ def setup_totp():
 
     if request.method == 'POST':
         totp_code = request.form.get('totp_code')
+        if not totp_code:
+            flash('Podaj kod TOTP', 'warning')
+            return redirect(url_for('auth.setup_totp'))
+        if not re.match(TOTP_CODE_REGEX, totp_code):
+            flash('Nieprawidłowy format kodu TOTP', 'danger')
+            return redirect(url_for('auth.setup_totp'))
+
         if totp.verify(totp_code, valid_window=1):
             current_user.is_verified = True
             db.session.commit()
@@ -230,6 +248,10 @@ def reset_password_request():
         return redirect(url_for('main.profile'))
     if request.method == "POST":
         email = bleach.clean(request.form.get("email"))
+        if not re.match(EMAIL_REGEX, email):
+            flash("Nieprawidłowy format adresu email", "warning")
+            return redirect(url_for('auth.reset_password_request'))
+
         user = User.query.filter_by(email=email).first()
         if user:
             send_reset_password_email(user)
@@ -258,7 +280,7 @@ def reset_password(token, user_id):
     user = validate_reset_password_token(token, user_id)
     if not user:
         update_failed_login_attempts_ip(request.remote_addr)
-        abort(406, description="Invalid token")
+        return "Invalid token", 401
 
     if request.method == "POST":
         password = bleach.clean(request.form.get("password"))
@@ -269,6 +291,9 @@ def reset_password(token, user_id):
             return redirect(url_for('auth.reset_password', token=token, user_id=user_id))
         if len(password) < 8:
             flash("Hasło jest za krótkie: min. 8 znaków", "warning")
+            return redirect(url_for('auth.reset_password', token=token, user_id=user_id))
+        if len(password) > 64:
+            flash("Podaj inne hasło", "warning")
             return redirect(url_for('auth.reset_password', token=token, user_id=user_id))
         if not re.match(PASSWORD_REGEX, password):
             flash("Hasło zawiera niedozwolone znaki: dozwolone tylko litery, cyfry oraz !@#$%^&*()_+-=", "warning")
